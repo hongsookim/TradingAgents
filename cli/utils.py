@@ -1,7 +1,7 @@
 import questionary
 from typing import List, Optional, Tuple, Dict
 
-from cli.models import AnalystType
+from cli.models import AnalystType, MarketType, MARKET_VENDOR_CONFIG
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -9,6 +9,43 @@ ANALYST_ORDER = [
     ("News Analyst", AnalystType.NEWS),
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
 ]
+
+
+def select_market() -> Tuple[MarketType, Dict]:
+    """Select market using an interactive selection.
+    
+    Returns:
+        Tuple of (MarketType, vendor_config_dict)
+    """
+    MARKET_OPTIONS = [
+        ("US Stock Market (NYSE, NASDAQ) - yfinance", MarketType.US),
+        ("Korean Stock Market (KRX) - yfinance + OpenDART", MarketType.KR),
+        ("China A-Share Market (沪/深) - akshare", MarketType.CN),
+    ]
+    
+    choice = questionary.select(
+        "Select Your [Market]:",
+        choices=[
+            questionary.Choice(display, value=value) for display, value in MARKET_OPTIONS
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+                ("pointer", "fg:yellow noinherit"),
+            ]
+        ),
+    ).ask()
+    
+    if choice is None:
+        console.print("\n[red]No market selected. Exiting...[/red]")
+        exit(1)
+    
+    market_type = choice
+    vendor_config = MARKET_VENDOR_CONFIG.get(market_type.value, MARKET_VENDOR_CONFIG["us"])
+    
+    return market_type, vendor_config
 
 
 def get_ticker() -> str:
