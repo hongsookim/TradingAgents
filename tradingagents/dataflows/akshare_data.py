@@ -450,13 +450,17 @@ def get_akshare_cashflow(
 
 
 def get_akshare_news(
-    ticker: Annotated[str, "ticker symbol of the A-share company"]
+    ticker: Annotated[str, "ticker symbol of the A-share company"],
+    start_date: Annotated[str, "Start date (not used for akshare, for compatibility)"] = None,
+    end_date: Annotated[str, "End date (not used for akshare, for compatibility)"] = None,
 ) -> str:
     """
     Get A-share stock news from akshare.
     
     Args:
         ticker: 6-digit A-share stock code
+        start_date: Start date (for compatibility with yfinance interface)
+        end_date: End date (for compatibility with yfinance interface)
     
     Returns:
         Formatted string with news data
@@ -505,9 +509,18 @@ def get_akshare_news(
         return f"Error retrieving A-share news for {ticker}: {str(e)}"
 
 
-def get_akshare_global_news() -> str:
+def get_akshare_global_news(
+    curr_date: Annotated[str, "Current date (for compatibility)"] = None,
+    look_back_days: Annotated[int, "Look back days (for compatibility)"] = 7,
+    limit: Annotated[int, "Maximum number of articles (for compatibility)"] = 10,
+) -> str:
     """
     Get global/market news from akshare.
+    
+    Args:
+        curr_date: Current date (for compatibility with yfinance interface)
+        look_back_days: Number of days to look back (for compatibility)
+        limit: Maximum number of articles (for compatibility)
     
     Returns:
         Formatted string with global news
@@ -582,16 +595,22 @@ def detect_akshare_asset_type(
     Detect if a ticker represents a Stock, ETF, or Mutual Fund in A-share market.
     
     A-share code rules:
-    - 600xxx, 601xxx, 603xxx, 605xxx, 688xxx: Shanghai Stock Exchange
-    - 000xxx, 001xxx, 002xxx, 003xxx: Shenzhen Stock Exchange (main board)
-    - 300xxx: Shenzhen Stock Exchange (ChiNext)
-    - 510xxx, 511xxx, 512xxx, 513xxx, 515xxx, 516xxx, 518xxx, 56xxx: Shanghai ETF
-    - 159xxx: Shenzhen ETF
-    - 150xxx: Shenzhen Structured Fund
-    - 16xxx: LOF Fund
-    - 18xxxx: Shanghai Stock Fund
-    - 50xxxx: Shanghai封闭式基金
-    - 0xxxx (except 000,001,002,003,300): Other funds
+    - Stocks (股票):
+      - 600xxx, 601xxx, 603xxx, 605xxx: Shanghai Stock Exchange main board
+      - 688xxx: Shanghai Stock Exchange STAR Market (科创板)
+      - 000xxx, 001xxx: Shenzhen Stock Exchange main board
+      - 002xxx, 003xxx: Shenzhen Stock Exchange SME board
+      - 300xxx: Shenzhen Stock Exchange ChiNext (创业板)
+    - ETFs:
+      - 510xxx, 511xxx, 512xxx, 513xxx, 515xxx, 516xxx, 518xxx, 56xxx: Shanghai ETF
+      - 159xxx: Shenzhen ETF
+    - Funds (基金):
+      - 16xxx: LOF Fund (上市开放式基金)
+      - 150xxx: Shenzhen Structured Fund (分级基金)
+      - 18xxxx: Shanghai Stock Fund
+      - 50xxxx: Shanghai封闭式基金
+      - 00xxxx, 01xxxx, 02xxxx, etc. (but not 000,001,002,003,300): Open-end funds (场外基金)
+      - 10xxxx, 11xxxx, 12xxxx, 13xxxx, 19xxxx: Other funds
     
     Args:
         ticker: Ticker symbol (6-digit code or with .SS/.SZ suffix)
@@ -610,27 +629,30 @@ def detect_akshare_asset_type(
         
         code = clean_ticker
         
+        # Check for ETFs first (more specific prefixes)
+        if code.startswith('510') or code.startswith('511') or code.startswith('512') or \
+           code.startswith('513') or code.startswith('515') or code.startswith('516') or \
+           code.startswith('518') or code.startswith('56') or code.startswith('159'):
+            return "ETF"
+        
+        # Check for LOF funds
+        if code.startswith('16'):
+            return "LOF"
+        
+        # Check for stocks (more specific prefixes)
         if code.startswith('600') or code.startswith('601') or code.startswith('603') or \
            code.startswith('605') or code.startswith('688') or \
            code.startswith('000') or code.startswith('001') or code.startswith('002') or \
            code.startswith('003') or code.startswith('300'):
             return "STOCK"
         
-        if code.startswith('510') or code.startswith('511') or code.startswith('512') or \
-           code.startswith('513') or code.startswith('515') or code.startswith('516') or \
-           code.startswith('518') or code.startswith('56') or code.startswith('159'):
-            return "ETF"
-        
-        if code.startswith('16'):
-            return "LOF"
-        
-        if code.startswith('50') or code.startswith('18') or code.startswith('150'):
-            return "MUTUAL_FUND"
-        
-        if code.startswith('0'):
-            return "MUTUAL_FUND"
-        
-        return "STOCK"
+        # Everything else is a fund (mutual fund, etc.)
+        # This includes:
+        # - 00xxxx, 01xxxx, 02xxxx, etc. (open-end funds that are not stocks)
+        # - 10xxxx, 11xxxx, 12xxxx, 13xxxx, 18xxxx, 19xxxx
+        # - 50xxxx (closed-end funds)
+        # - 150xxx (structured funds)
+        return "MUTUAL_FUND"
         
     except Exception as e:
         return f"UNKNOWN (error: {str(e)})"
