@@ -128,7 +128,7 @@ def select_shallow_thinking_agent(provider) -> str:
     # Define shallow thinking llm engine options with their corresponding model names
     SHALLOW_AGENT_OPTIONS = {
         "openai": [
-            ("GPT-5.4 Nano - Cheapest GPT-5.4-class, high-volume", "gpt-5.4-nano"),
+            ("GPT-5.4 - Latest flagship, agentic & coding", "gpt-5.4"),
             ("GPT-5.4 Mini - Strong mini for coding & agents", "gpt-5.4-mini"),
             ("GPT-5 Nano - Fast, cost-efficient", "gpt-5-nano"),
             ("GPT-5 Mini - Cost-optimized reasoning", "gpt-5-mini"),

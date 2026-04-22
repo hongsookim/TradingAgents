@@ -6,6 +6,7 @@ from .analysts.fundamentals_analyst import create_fundamentals_analyst
 from .analysts.market_analyst import create_market_analyst
 from .analysts.news_analyst import create_news_analyst
 from .analysts.social_media_analyst import create_social_media_analyst
+from .analysts.fund_analyst import create_fund_analyst, create_dynamic_analyst_router
 
 from .researchers.bear_researcher import create_bear_researcher
 from .researchers.bull_researcher import create_bull_researcher
@@ -29,6 +30,8 @@ __all__ = [
     "create_bull_researcher",
     "create_research_manager",
     "create_fundamentals_analyst",
+    "create_fund_analyst",
+    "create_dynamic_analyst_router",
     "create_market_analyst",
     "create_neutral_debator",
     "create_news_analyst",

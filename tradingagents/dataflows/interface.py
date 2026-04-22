@@ -23,6 +23,13 @@ from .y_finance import (
     get_cashflow as get_yfinance_cashflow,
     get_income_statement as get_yfinance_income_statement,
     get_insider_transactions as get_yfinance_insider_transactions,
+    detect_asset_type as get_yfinance_detect_asset_type,
+    get_fund_holdings as get_yfinance_fund_holdings,
+    get_fund_nav as get_yfinance_fund_nav,
+    get_fund_manager_info as get_yfinance_fund_manager_info,
+    get_fund_expense_ratio as get_yfinance_fund_expense_ratio,
+    get_fund_risk_metrics as get_yfinance_fund_risk_metrics,
+    get_fund_overview as get_yfinance_fund_overview,
 )
 from .yfinance_news import get_news_yfinance, get_global_news_yfinance
 from .alpha_vantage import (
@@ -83,6 +90,18 @@ TOOLS_CATEGORIES = {
             "get_dart_financials",
             "get_dart_disclosures",
         ]
+    },
+    "fund_data": {
+        "description": "Fund (ETF/Mutual Fund) specific data",
+        "tools": [
+            "detect_asset_type",
+            "get_fund_holdings",
+            "get_fund_nav",
+            "get_fund_manager_info",
+            "get_fund_expense_ratio",
+            "get_fund_risk_metrics",
+            "get_fund_overview",
+        ]
     }
 }
 
@@ -140,6 +159,28 @@ VENDOR_METHODS = {
     },
     "get_dart_disclosures": {
         "opendart": get_opendart_disclosures,
+    },
+    # fund_data - Fund (ETF/Mutual Fund) specific data
+    "detect_asset_type": {
+        "yfinance": get_yfinance_detect_asset_type,
+    },
+    "get_fund_holdings": {
+        "yfinance": get_yfinance_fund_holdings,
+    },
+    "get_fund_nav": {
+        "yfinance": get_yfinance_fund_nav,
+    },
+    "get_fund_manager_info": {
+        "yfinance": get_yfinance_fund_manager_info,
+    },
+    "get_fund_expense_ratio": {
+        "yfinance": get_yfinance_fund_expense_ratio,
+    },
+    "get_fund_risk_metrics": {
+        "yfinance": get_yfinance_fund_risk_metrics,
+    },
+    "get_fund_overview": {
+        "yfinance": get_yfinance_fund_overview,
     },
 }
 

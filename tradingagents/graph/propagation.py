@@ -23,6 +23,7 @@ class Propagator:
             "messages": [("human", company_name)],
             "company_of_interest": company_name,
             "trade_date": str(trade_date),
+            "asset_type": "",
             "investment_debate_state": InvestDebateState(
                 {"history": "", "current_response": "", "count": 0}
             ),
@@ -37,6 +38,7 @@ class Propagator:
             ),
             "market_report": "",
             "fundamentals_report": "",
+            "fund_overview_report": "",
             "sentiment_report": "",
             "news_report": "",
             "portfolio_context": "",
