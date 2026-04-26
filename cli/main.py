@@ -1,3 +1,9 @@
+import os
+PROXY = "http://127.0.0.1:7890"  
+os.environ["http_proxy"] = PROXY
+os.environ["https_proxy"] = PROXY
+os.environ["HTTP_PROXY"] = PROXY
+os.environ["HTTPS_PROXY"] = PROXY
 from typing import Optional
 import datetime
 import typer
@@ -498,10 +504,24 @@ def get_user_selections():
             box_content += f"\n[dim]Default: {default}[/dim]"
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
+    # Step 0: Market selection (most important - determines data vendors)
+    console.print(
+        create_question_box(
+            "Step 0: Market Selection", 
+            "Select the stock market you want to analyze.\nThis will automatically configure the appropriate data vendors."
+        )
+    )
+    selected_market, market_vendor_config = select_market()
+    console.print(
+        f"[green]Selected market:[/green] {selected_market.value.upper()} ({market_vendor_config['description']})"
+    )
+
     # Step 1: Ticker symbol
     console.print(
         create_question_box(
-            "Step 1: Ticker Symbol", "Enter the ticker symbol to analyze", "SPY"
+            "Step 1: Ticker Symbol", 
+            f"Enter the ticker symbol to analyze\nExamples: {', '.join(market_vendor_config['ticker_examples'])}",
+            market_vendor_config['ticker_examples'][0]
         )
     )
     selected_ticker = get_ticker()
@@ -594,6 +614,8 @@ def get_user_selections():
     broker_config = select_broker_mode()
 
     return {
+        "market": selected_market.value,
+        "market_vendor_config": market_vendor_config,
         "ticker": selected_ticker,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
@@ -922,6 +944,18 @@ def run_analysis():
 
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
+    
+    # Apply market-specific configuration (if selected)
+    market = selections.get("market")
+    if market:
+        config["market"] = market
+        market_vendor_config = selections.get("market_vendor_config", {})
+        if market_vendor_config and "data_vendors" in market_vendor_config:
+            # Merge vendor configs - preserve existing keys, update with market-specific
+            for data_type, vendor in market_vendor_config["data_vendors"].items():
+                if data_type in config["data_vendors"]:
+                    config["data_vendors"][data_type] = vendor
+    
     config["max_debate_rounds"] = selections["research_depth"]
     config["max_risk_discuss_rounds"] = selections["research_depth"]
     config["quick_think_llm"] = selections["shallow_thinker"]
@@ -972,7 +1006,7 @@ def run_analysis():
             func(*args, **kwargs)
             timestamp, message_type, content = obj.messages[-1]
             content = content.replace("\n", " ")  # Replace newlines with spaces
-            with open(log_file, "a") as f:
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"{timestamp} [{message_type}] {content}\n")
         return wrapper
     
@@ -983,7 +1017,7 @@ def run_analysis():
             func(*args, **kwargs)
             timestamp, tool_name, args = obj.tool_calls[-1]
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
-            with open(log_file, "a") as f:
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"{timestamp} [Tool Call] {tool_name}({args_str})\n")
         return wrapper
 
@@ -996,7 +1030,7 @@ def run_analysis():
                 content = obj.report_sections[section_name]
                 if content:
                     file_name = f"{section_name}.md"
-                    with open(report_dir / file_name, "w") as f:
+                    with open(report_dir / file_name, "w", encoding="utf-8") as f:
                         f.write(content)
         return wrapper
 

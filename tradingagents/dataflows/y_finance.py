@@ -484,3 +484,538 @@ def get_insider_transactions(
         raise
     except Exception as e:
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def detect_asset_type(
+    ticker: Annotated[str, "ticker symbol to detect asset type"]
+) -> str:
+    """
+    Detect if a ticker represents a Stock, ETF, or Mutual Fund.
+    
+    Returns:
+        str: One of 'STOCK', 'ETF', 'MUTUAL_FUND', 'UNKNOWN'
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        try:
+            fast_info = ticker_obj.fast_info
+            quote_type = fast_info.quote_type
+        except Exception:
+            quote_type = None
+        
+        if not quote_type:
+            try:
+                info = ticker_obj.info
+                if info:
+                    quote_type = info.get('quoteType', '').upper()
+            except Exception:
+                pass
+        
+        if not quote_type:
+            return "UNKNOWN"
+        
+        quote_type = quote_type.upper()
+        
+        if quote_type == 'ETF':
+            return 'ETF'
+        elif quote_type == 'MUTUALFUND':
+            return 'MUTUAL_FUND'
+        elif quote_type in ['EQUITY', 'STOCK']:
+            return 'STOCK'
+        else:
+            try:
+                info = ticker_obj.info
+                if info and info.get('fundFamily'):
+                    return 'FUND'
+                if info and info.get('expenseRatio') is not None:
+                    return 'POSSIBLE_FUND'
+            except Exception:
+                pass
+            return quote_type
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"UNKNOWN (error: {str(e)})"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_holdings(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    top_n: Annotated[int, "number of top holdings to return"] = 10,
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get fund holdings (top stocks held by ETF/Mutual Fund).
+    
+    Args:
+        ticker: Ticker symbol of the fund (e.g., SPY, QQQ)
+        top_n: Number of top holdings to return
+        curr_date: Current date (for compatibility with caching)
+    
+    Returns:
+        Formatted string with fund holdings information
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        lines = []
+        header = f"# Fund Holdings for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        holdings_found = False
+        
+        try:
+            funds_data = ticker_obj.funds_data
+            if funds_data is not None and hasattr(funds_data, 'top_holdings'):
+                top_holdings = funds_data.top_holdings
+                if top_holdings is not None and not top_holdings.empty:
+                    lines.append("## Top Holdings (from funds_data):\n")
+                    lines.append(top_holdings.head(top_n).to_string())
+                    lines.append("\n")
+                    holdings_found = True
+        except Exception:
+            pass
+        
+        try:
+            info = ticker_obj.info
+            if info:
+                for key in info.keys():
+                    if 'holding' in key.lower() or 'sector' in key.lower() or 'weight' in key.lower():
+                        value = info.get(key)
+                        if value is not None:
+                            lines.append(f"## {key}:\n")
+                            lines.append(str(value))
+                            lines.append("\n")
+                            holdings_found = True
+        except Exception:
+            pass
+        
+        try:
+            inst_holders = ticker_obj.institutional_holders
+            if inst_holders is not None and not inst_holders.empty:
+                lines.append("## Institutional Holders:\n")
+                lines.append(inst_holders.head(top_n).to_string())
+                lines.append("\n")
+        except Exception:
+            pass
+        
+        try:
+            major_holders = ticker_obj.major_holders
+            if major_holders is not None:
+                lines.append("## Major Holders:\n")
+                lines.append(str(major_holders))
+                lines.append("\n")
+        except Exception:
+            pass
+        
+        if not holdings_found:
+            lines.append("Note: Detailed holdings data not available for this fund.\n")
+            lines.append("This is common for certain ETFs and mutual funds.\n")
+            lines.append("Please refer to the fund's official website for holdings information.\n")
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving fund holdings for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_nav(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    period: Annotated[str, "time period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max"] = "1y",
+    calculate_drawdown: Annotated[bool, "whether to calculate max drawdown"] = True,
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get Net Asset Value (NAV) history and drawdown data for a fund.
+    
+    For ETFs, this uses historical price data as a proxy for NAV.
+    
+    Args:
+        ticker: Ticker symbol of the fund
+        period: Time period for historical data
+        calculate_drawdown: Whether to calculate drawdown metrics
+        curr_date: Current date (for compatibility)
+    
+    Returns:
+        Formatted string with NAV history and drawdown information
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        hist = ticker_obj.history(period=period)
+        
+        if hist.empty:
+            return f"No NAV/price data found for symbol '{ticker}' for period '{period}'"
+        
+        lines = []
+        header = f"# Fund NAV/Price History for {ticker.upper()}\n"
+        header += f"# Period: {period}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        if hist.index.tz is not None:
+            hist.index = hist.index.tz_localize(None)
+        
+        if 'Close' in hist.columns:
+            latest_close = hist['Close'].iloc[-1]
+            highest_close = hist['Close'].max()
+            lowest_close = hist['Close'].min()
+            
+            lines.append(f"## Summary Statistics ({period}):\n")
+            lines.append(f"Latest Price/NAV: {latest_close:.4f}\n")
+            lines.append(f"Highest Price/NAV: {highest_close:.4f}\n")
+            lines.append(f"Lowest Price/NAV: {lowest_close:.4f}\n")
+            lines.append(f"Total data points: {len(hist)}\n\n")
+        
+        if calculate_drawdown and 'Close' in hist.columns:
+            rolling_max = hist['Close'].cummax()
+            drawdown = (hist['Close'] - rolling_max) / rolling_max
+            max_drawdown = drawdown.min()
+            max_drawdown_date = drawdown.idxmin()
+            
+            lines.append(f"## Drawdown Analysis:\n")
+            lines.append(f"Maximum Drawdown: {max_drawdown:.2%}\n")
+            lines.append(f"Date of Max Drawdown: {max_drawdown_date}\n\n")
+            
+            if len(hist) >= 30:
+                recent_30d = hist.tail(30)
+                rolling_max_30 = recent_30d['Close'].cummax()
+                drawdown_30 = (recent_30d['Close'] - rolling_max_30) / rolling_max_30
+                max_dd_30 = drawdown_30.min()
+                lines.append(f"30-Day Max Drawdown: {max_dd_30:.2%}\n\n")
+        
+        lines.append(f"## Recent Price/NAV Data (Last 10 entries):\n")
+        numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
+        for col in numeric_columns:
+            if col in hist.columns:
+                hist[col] = hist[col].round(4)
+        
+        lines.append(hist.tail(10).to_string())
+        lines.append("\n")
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving NAV data for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_manager_info(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get fund manager information and past performance.
+    
+    Args:
+        ticker: Ticker symbol of the fund
+        curr_date: Current date (for compatibility)
+    
+    Returns:
+        Formatted string with fund manager information
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        lines = []
+        header = f"# Fund Manager Information for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        info_found = False
+        
+        try:
+            info = ticker_obj.info
+            if info:
+                manager_fields = [
+                    ('fundFamily', 'Fund Family'),
+                    ('fundInceptionDate', 'Fund Inception Date'),
+                    ('legalType', 'Legal Type'),
+                    ('managementInfo', 'Management Info'),
+                    ('managerName', 'Manager Name'),
+                    ('portfolioName', 'Portfolio Name'),
+                    ('longName', 'Fund Full Name'),
+                    ('shortName', 'Fund Short Name'),
+                ]
+                
+                for info_key, display_name in manager_fields:
+                    value = info.get(info_key)
+                    if value is not None:
+                        if info_key == 'fundInceptionDate':
+                            try:
+                                if isinstance(value, (int, float)):
+                                    from datetime import datetime as dt
+                                    value = dt.fromtimestamp(value).strftime('%Y-%m-%d')
+                            except Exception:
+                                pass
+                        lines.append(f"{display_name}: {value}\n")
+                        info_found = True
+        except Exception:
+            pass
+        
+        if not info_found:
+            lines.append("Note: Detailed fund manager information not available.\n")
+            lines.append("This data may not be accessible for certain funds.\n")
+        
+        try:
+            fast_info = ticker_obj.fast_info
+            lines.append(f"\n## Quick Info:\n")
+            lines.append(f"Quote Type: {fast_info.quote_type}\n")
+            lines.append(f"Currency: {fast_info.currency}\n")
+            lines.append(f"Exchange: {fast_info.exchange}\n")
+        except Exception:
+            pass
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving fund manager info for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_expense_ratio(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get fund expense ratio, total assets, and other basic information.
+    
+    Args:
+        ticker: Ticker symbol of the fund
+        curr_date: Current date (for compatibility)
+    
+    Returns:
+        Formatted string with expense ratio and fund information
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        lines = []
+        header = f"# Fund Expense & Basic Information for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        info_found = False
+        
+        try:
+            info = ticker_obj.info
+            if info:
+                expense_fields = [
+                    ('expenseRatio', 'Expense Ratio'),
+                    ('annualReportExpenseRatio', 'Annual Report Expense Ratio'),
+                    ('grossExpenseRatio', 'Gross Expense Ratio'),
+                    ('netExpenseRatio', 'Net Expense Ratio'),
+                    ('totalAssets', 'Total Assets'),
+                    ('netAssets', 'Net Assets'),
+                    ('category', 'Category'),
+                    ('investmentStrategy', 'Investment Strategy'),
+                    ('fundObjective', 'Fund Objective'),
+                ]
+                
+                for info_key, display_name in expense_fields:
+                    value = info.get(info_key)
+                    if value is not None:
+                        if 'Ratio' in display_name and isinstance(value, (int, float)):
+                            lines.append(f"{display_name}: {value:.4%}\n")
+                        elif 'Assets' in display_name and isinstance(value, (int, float)):
+                            lines.append(f"{display_name}: ${value:,.0f}\n")
+                        else:
+                            lines.append(f"{display_name}: {value}\n")
+                        info_found = True
+        except Exception:
+            pass
+        
+        try:
+            fast_info = ticker_obj.fast_info
+            lines.append(f"\n## Market Data:\n")
+            lines.append(f"Last Price: {fast_info.last_price:.4f}\n")
+            lines.append(f"50-Day Average: {fast_info.fifty_day_average:.4f}\n")
+            lines.append(f"200-Day Average: {fast_info.two_hundred_day_average:.4f}\n")
+            lines.append(f"52-Week High: {fast_info.year_high:.4f}\n")
+            lines.append(f"52-Week Low: {fast_info.year_low:.4f}\n")
+            lines.append(f"Year-to-Date Change: {fast_info.year_change:.2%}\n")
+        except Exception:
+            pass
+        
+        if not info_found:
+            lines.append("Note: Detailed expense information not available.\n")
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving expense info for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_risk_metrics(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get fund risk metrics including beta, sharpe ratio, alpha, max drawdown, etc.
+    
+    Args:
+        ticker: Ticker symbol of the fund
+        curr_date: Current date (for compatibility)
+    
+    Returns:
+        Formatted string with risk metrics
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        
+        lines = []
+        header = f"# Fund Risk Metrics for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        info_found = False
+        
+        try:
+            info = ticker_obj.info
+            if info:
+                risk_fields = [
+                    ('beta', 'Beta'),
+                    ('beta3Year', 'Beta (3-Year)'),
+                    ('beta5Year', 'Beta (5-Year)'),
+                    ('sharpeRatio', 'Sharpe Ratio'),
+                    ('sharpeRatio3Year', 'Sharpe Ratio (3-Year)'),
+                    ('sharpeRatio5Year', 'Sharpe Ratio (5-Year)'),
+                    ('alpha', 'Alpha'),
+                    ('alpha3Year', 'Alpha (3-Year)'),
+                    ('standardDeviation', 'Standard Deviation'),
+                    ('standardDeviation3Year', 'Standard Deviation (3-Year)'),
+                    ('treynorRatio', 'Treynor Ratio'),
+                    ('maxDrawdown', 'Maximum Drawdown'),
+                    ('ytdReturn', 'Year-to-Date Return'),
+                    ('threeYearAverageReturn', '3-Year Average Return'),
+                    ('fiveYearAverageReturn', '5-Year Average Return'),
+                ]
+                
+                lines.append("## Risk & Performance Metrics:\n")
+                for info_key, display_name in risk_fields:
+                    value = info.get(info_key)
+                    if value is not None:
+                        if 'Return' in display_name or 'Drawdown' in display_name:
+                            if isinstance(value, (int, float)):
+                                lines.append(f"{display_name}: {value:.2%}\n")
+                            else:
+                                lines.append(f"{display_name}: {value}\n")
+                        else:
+                            lines.append(f"{display_name}: {value}\n")
+                        info_found = True
+        except Exception:
+            pass
+        
+        try:
+            hist = ticker_obj.history(period="1y")
+            if not hist.empty and 'Close' in hist.columns:
+                rolling_max = hist['Close'].cummax()
+                drawdown = (hist['Close'] - rolling_max) / rolling_max
+                max_dd = drawdown.min()
+                
+                lines.append(f"\n## Calculated Metrics (1-Year):\n")
+                lines.append(f"Calculated Max Drawdown: {max_dd:.2%}\n")
+                lines.append(f"Data points used: {len(hist)}\n")
+        except Exception:
+            pass
+        
+        if not info_found:
+            lines.append("Note: Detailed risk metrics not available from yfinance.\n")
+            lines.append("\n## Important Note for Fund Analysis:\n")
+            lines.append("For comprehensive fund analysis, you should also consider:\n")
+            lines.append("1. Using historical price data to calculate volatility and drawdown\n")
+            lines.append("2. Comparing against relevant benchmarks (e.g., S&P 500 for equity funds)\n")
+            lines.append("3. Reviewing the fund's prospectus and annual reports\n")
+            lines.append("4. Checking the fund's official website for updated information\n")
+        
+        lines.append("\n## Data Availability Notes:\n")
+        lines.append("- Some funds may not have all metrics available\n")
+        lines.append("- Metrics like Sharpe Ratio and Alpha may require benchmark comparison\n")
+        lines.append("- Always verify important data with official sources\n")
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving risk metrics for {ticker}: {str(e)}"
+
+
+@yfinance_retry()
+@yfinance_cached()
+def get_fund_overview(
+    ticker: Annotated[str, "ticker symbol of the fund"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+) -> str:
+    """
+    Get a comprehensive overview of a fund, combining all relevant information.
+    
+    This is a convenience function that aggregates data from multiple sources.
+    
+    Args:
+        ticker: Ticker symbol of the fund
+        curr_date: Current date (for compatibility)
+    
+    Returns:
+        Formatted string with comprehensive fund overview
+    """
+    try:
+        lines = []
+        header = f"# Fund Overview for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        lines.append(header)
+        
+        asset_type = detect_asset_type(ticker)
+        lines.append(f"## Asset Type: {asset_type}\n\n")
+        
+        manager_info = get_fund_manager_info(ticker, curr_date)
+        if "Error" not in manager_info and "Note: Detailed" not in manager_info:
+            lines.append("## Basic Information:\n")
+            info_section = manager_info.split("## Quick Info:")[0] if "## Quick Info:" in manager_info else manager_info
+            lines.append(info_section.replace(f"# Fund Manager Information for {ticker.upper()}\n", ""))
+            lines.append("\n")
+        
+        expense_info = get_fund_expense_ratio(ticker, curr_date)
+        if "Error" not in expense_info:
+            lines.append("## Expense Information:\n")
+            lines.append(expense_info.split("## Market Data:")[0].replace(f"# Fund Expense & Basic Information for {ticker.upper()}\n", ""))
+            lines.append("\n")
+        
+        risk_metrics = get_fund_risk_metrics(ticker, curr_date)
+        if "Error" not in risk_metrics and "Note: Detailed" not in risk_metrics:
+            lines.append("## Risk Metrics:\n")
+            lines.append(risk_metrics.split("## Data Availability Notes:")[0].replace(f"# Fund Risk Metrics for {ticker.upper()}\n", ""))
+            lines.append("\n")
+        
+        lines.append("## Important Considerations:\n")
+        lines.append("- This data is sourced from Yahoo Finance and may be incomplete\n")
+        lines.append("- Always verify critical information with the fund's official documentation\n")
+        lines.append("- Past performance does not guarantee future results\n")
+        lines.append("- Consider consulting a financial advisor before making investment decisions\n")
+        
+        return "".join(lines)
+
+    except YFRateLimitError:
+        raise
+    except Exception as e:
+        return f"Error retrieving fund overview for {ticker}: {str(e)}"
