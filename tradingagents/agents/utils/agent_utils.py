@@ -36,6 +36,15 @@ from tradingagents.agents.utils.dart_data_tools import (
     get_dart_financials,
     get_dart_disclosures,
 )
+from tradingagents.agents.utils.fund_data_tools import (
+    detect_asset_type,
+    get_fund_holdings,
+    get_fund_nav,
+    get_fund_manager_info,
+    get_fund_expense_ratio,
+    get_fund_risk_metrics,
+    get_fund_overview,
+)
 
 def create_msg_delete():
     def delete_messages(state):

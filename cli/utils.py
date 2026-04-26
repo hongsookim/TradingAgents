@@ -1,7 +1,7 @@
 import questionary
 from typing import List, Optional, Tuple, Dict
 
-from cli.models import AnalystType
+from cli.models import AnalystType, MarketType, MARKET_VENDOR_CONFIG
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -9,6 +9,43 @@ ANALYST_ORDER = [
     ("News Analyst", AnalystType.NEWS),
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
 ]
+
+
+def select_market() -> Tuple[MarketType, Dict]:
+    """Select market using an interactive selection.
+    
+    Returns:
+        Tuple of (MarketType, vendor_config_dict)
+    """
+    MARKET_OPTIONS = [
+        ("US Stock Market (NYSE, NASDAQ) - yfinance", MarketType.US),
+        ("Korean Stock Market (KRX) - yfinance + OpenDART", MarketType.KR),
+        ("China A-Share Market (沪/深) - akshare", MarketType.CN),
+    ]
+    
+    choice = questionary.select(
+        "Select Your [Market]:",
+        choices=[
+            questionary.Choice(display, value=value) for display, value in MARKET_OPTIONS
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+                ("pointer", "fg:yellow noinherit"),
+            ]
+        ),
+    ).ask()
+    
+    if choice is None:
+        console.print("\n[red]No market selected. Exiting...[/red]")
+        exit(1)
+    
+    market_type = choice
+    vendor_config = MARKET_VENDOR_CONFIG.get(market_type.value, MARKET_VENDOR_CONFIG["us"])
+    
+    return market_type, vendor_config
 
 
 def get_ticker() -> str:
@@ -128,7 +165,7 @@ def select_shallow_thinking_agent(provider) -> str:
     # Define shallow thinking llm engine options with their corresponding model names
     SHALLOW_AGENT_OPTIONS = {
         "openai": [
-            ("GPT-5.4 Nano - Cheapest GPT-5.4-class, high-volume", "gpt-5.4-nano"),
+            ("GPT-5.4 - Latest flagship, agentic & coding", "gpt-5.4"),
             ("GPT-5.4 Mini - Strong mini for coding & agents", "gpt-5.4-mini"),
             ("GPT-5 Nano - Fast, cost-efficient", "gpt-5-nano"),
             ("GPT-5 Mini - Cost-optimized reasoning", "gpt-5-mini"),

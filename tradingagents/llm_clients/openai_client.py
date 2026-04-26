@@ -44,35 +44,16 @@ class OpenAIClient(BaseLLMClient):
 
     def get_llm(self) -> Any:
         """Return configured ChatOpenAI instance."""
-        llm_kwargs = {"model": self.model}
+        
+        # 🌟 终极暴力修改：不管框架配置怎么变，强制覆盖为您号码池的中转信息
+        llm_kwargs = {
+            "model": self.model,
+            "base_url": "https://coder.api.visioncoder.cn/v1",  # 锁死中转地址
+            "api_key": "sk-KrIF8KT8dqAxoX62oc24oZ6397wwz4No",    # 锁死您的密钥
+        }
 
-        if self.provider == "xai":
-            llm_kwargs["base_url"] = "https://api.x.ai/v1"
-            api_key = os.environ.get("XAI_API_KEY")
-            if api_key:
-                llm_kwargs["api_key"] = api_key
-        elif self.provider == "openrouter":
-            llm_kwargs["base_url"] = "https://openrouter.ai/api/v1"
-            api_key = os.environ.get("OPENROUTER_API_KEY")
-            if api_key:
-                llm_kwargs["api_key"] = api_key
-        elif self.provider == "groq":
-            llm_kwargs["base_url"] = "https://api.groq.com/openai/v1"
-            api_key = os.environ.get("GROQ_API_KEY")
-            if api_key:
-                llm_kwargs["api_key"] = api_key
-        elif self.provider == "together":
-            llm_kwargs["base_url"] = "https://api.together.xyz/v1"
-            api_key = os.environ.get("TOGETHER_API_KEY")
-            if api_key:
-                llm_kwargs["api_key"] = api_key
-        elif self.provider == "ollama":
-            llm_kwargs["base_url"] = "http://localhost:11434/v1"
-            llm_kwargs["api_key"] = "ollama"  # Ollama doesn't require auth
-        elif self.base_url:
-            llm_kwargs["base_url"] = self.base_url
-
-        for key in ("timeout", "max_retries", "reasoning_effort", "api_key", "callbacks"):
+        # 保留超时时间、推理等级等必要参数的传递
+        for key in ("timeout", "max_retries", "reasoning_effort", "callbacks"):
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
 
