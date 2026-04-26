@@ -22,13 +22,16 @@ DEFAULT_CONFIG = {
         "dataflows/data_cache",
     ),
     # LLM settings
-    "llm_provider": "anthropic",
-    "deep_think_llm": "claude-sonnet-4-6",
-    "quick_think_llm": "claude-haiku-4-5-20251001",
-    "backend_url": None,
+    "llm_provider": "openai",
+    "deep_think_llm": "gpt-5.4",
+    "quick_think_llm": "gpt-5.4",
+    "backend_url": "https://coder.api.visioncoder.cn/v1",
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
-    "openai_reasoning_effort": None,    # "medium", "high", "low"
+    "openai_reasoning_effort": "high",    # "medium", "high", "low"
+    "anthropic_effort": None,
+
+    "output_language": "Chinese",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
@@ -41,6 +44,7 @@ DEFAULT_CONFIG = {
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
         "news_data": "yfinance",             # Options: alpha_vantage, yfinance
         "dart_data": "opendart",             # Options: opendart
+        "fund_data": "yfinance",             # Options: yfinance (ETF/Mutual Fund data)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
@@ -59,6 +63,7 @@ DEFAULT_CONFIG = {
         "financial_statements": 3600,  # 1 hour
         "news": 900,                   # 15 minutes
         "insider_transactions": 3600,  # 1 hour
+        "fund_data": 3600,             # 1 hour (ETF/Mutual Fund data)
     },
     # Investment persona configuration
     # Options: None, "warren_buffett", "ray_dalio", "peter_lynch"

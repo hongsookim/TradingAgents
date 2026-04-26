@@ -46,6 +46,13 @@ from tradingagents.agents.utils.agent_utils import (
     get_global_news,
     get_dart_financials,
     get_dart_disclosures,
+    detect_asset_type,
+    get_fund_holdings,
+    get_fund_nav,
+    get_fund_manager_info,
+    get_fund_expense_ratio,
+    get_fund_risk_metrics,
+    get_fund_overview,
 )
 
 from .conditional_logic import ConditionalLogic
@@ -179,20 +186,16 @@ class TradingAgentsGraph:
         return {
             "market": ToolNode(
                 [
-                    # Core stock data tools
                     get_stock_data,
-                    # Technical indicators are pre-computed in market_analyst_node
                 ]
             ),
             "social": ToolNode(
                 [
-                    # News tools for social media analysis
                     get_news,
                 ]
             ),
             "news": ToolNode(
                 [
-                    # News and insider information
                     get_news,
                     get_global_news,
                     get_insider_transactions,
@@ -200,14 +203,23 @@ class TradingAgentsGraph:
             ),
             "fundamentals": ToolNode(
                 [
-                    # Fundamental analysis tools
                     get_fundamentals,
                     get_balance_sheet,
                     get_cashflow,
                     get_income_statement,
-                    # Korean DART data tools
                     get_dart_financials,
                     get_dart_disclosures,
+                ]
+            ),
+            "fund": ToolNode(
+                [
+                    detect_asset_type,
+                    get_fund_holdings,
+                    get_fund_nav,
+                    get_fund_manager_info,
+                    get_fund_expense_ratio,
+                    get_fund_risk_metrics,
+                    get_fund_overview,
                 ]
             ),
         }
@@ -259,10 +271,12 @@ class TradingAgentsGraph:
         self.log_states_dict[str(trade_date)] = {
             "company_of_interest": final_state["company_of_interest"],
             "trade_date": final_state["trade_date"],
+            "asset_type": final_state.get("asset_type", ""),
             "market_report": final_state["market_report"],
             "sentiment_report": final_state["sentiment_report"],
             "news_report": final_state["news_report"],
             "fundamentals_report": final_state["fundamentals_report"],
+            "fund_overview_report": final_state.get("fund_overview_report", ""),
             "investment_debate_state": {
                 "bull_history": final_state["investment_debate_state"]["bull_history"],
                 "bear_history": final_state["investment_debate_state"]["bear_history"],

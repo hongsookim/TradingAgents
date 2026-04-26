@@ -51,6 +51,8 @@ class AgentState(MessagesState):
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     trade_date: Annotated[str, "What date we are trading at"]
 
+    asset_type: Annotated[str, "Type of asset: STOCK, ETF, MUTUAL_FUND, FUND, UNKNOWN"]
+
     sender: Annotated[str, "Agent that sent this message"]
 
     # research step
@@ -60,6 +62,7 @@ class AgentState(MessagesState):
         str, "Report from the News Researcher of current world affairs"
     ]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Researcher"]
+    fund_overview_report: Annotated[str, "Report from the Fund Analyst (for ETF/Mutual Fund)"]
 
     # researcher team discussion step
     investment_debate_state: Annotated[
